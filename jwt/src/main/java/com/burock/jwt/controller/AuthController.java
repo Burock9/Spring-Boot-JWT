@@ -35,11 +35,8 @@ public class AuthController {
         String username = body.get("username");
         String password = body.get("password");
 
-        // authenticate using AuthenticationManager via provider
         try {
-            // load user
             var userOpt = userService.findByUsername(username).orElseThrow();
-            // check password (we could use manager but direct check ok here)
             if (!userService.passwordEncoder().matches(password, userOpt.getPassword())) {
                 return ResponseEntity.status(401).body(Map.of("error", "Invalid credentials"));
             }
