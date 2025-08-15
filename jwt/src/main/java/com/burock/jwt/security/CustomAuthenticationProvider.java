@@ -29,7 +29,7 @@ public class CustomAuthenticationProvider implements AuthenticationProvider {
         var userDetails = userService.loadUserByUsername(username);
 
         if (!passwordEncoder.matches(rawPassword, userDetails.getPassword())) {
-            throw new BadCredentialsException("Invalid username or password");
+            throw new BadCredentialsException("Geçersiz kullanıcı adı veya parola");
         }
 
         return new UsernamePasswordAuthenticationToken(

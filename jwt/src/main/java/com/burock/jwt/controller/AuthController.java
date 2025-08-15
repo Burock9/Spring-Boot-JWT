@@ -1,8 +1,14 @@
 package com.burock.jwt.controller;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import com.burock.jwt.dto.LoginRequest;
+import com.burock.jwt.dto.RegisterRequest;
 import com.burock.jwt.model.User;
 import com.burock.jwt.security.JwtUtil;
 import com.burock.jwt.service.UserService;
@@ -15,36 +21,43 @@ public class AuthController {
 
     private final UserService userService;
     private final JwtUtil jwtUtil;
+    private final AuthenticationManager authenticationManager;
 
-    public AuthController(UserService userService, JwtUtil jwtUtil) {
-        this.userService = userService; this.jwtUtil = jwtUtil;
+    public AuthController(UserService userService, JwtUtil jwtUtil, AuthenticationManager authenticationManager) {
+        this.userService = userService;
+        this.jwtUtil = jwtUtil;
+        this.authenticationManager = authenticationManager;
     }
 
     @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody Map<String,String> body) {
-        String username = body.get("username");
-        String password = body.get("password");
-        String role = body.getOrDefault("role", "ROLE_USER"); 
+    public ResponseEntity<?> register(@RequestBody RegisterRequest registerDTO) {
+        String role = (registerDTO.getRole() != null && !registerDTO.getRole().isBlank())
+                ? registerDTO.getRole()
+                : "ROLE_USER";
 
-        User u = userService.register(username, password, role);
-        return ResponseEntity.ok(Map.of("id", u.getId(), "username", u.getUsername(), "role", u.getRole()));
+        User u = userService.register(registerDTO.getUsername(), registerDTO.getPassword(), role);
+        return ResponseEntity.ok(Map.of(
+                "id", u.getId(),
+                "username", u.getUsername(),
+                "role", u.getRole()));
     }
 
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody Map<String,String> body) {
-        String username = body.get("username");
-        String password = body.get("password");
-
+    public ResponseEntity<?> login(@RequestBody LoginRequest loginDTO) {
         try {
-            var userOpt = userService.findByUsername(username).orElseThrow();
-            if (!userService.passwordEncoder().matches(password, userOpt.getPassword())) {
-                return ResponseEntity.status(401).body(Map.of("error", "Invalid credentials"));
-            }
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(
+                            loginDTO.getUsername(),
+                            loginDTO.getPassword()));
 
-            String token = jwtUtil.generateToken(username, userOpt.getRole());
+            var userDetails = (org.springframework.security.core.userdetails.User) authentication.getPrincipal();
+            String role = userDetails.getAuthorities().iterator().next().getAuthority();
+
+            String token = jwtUtil.generateToken(userDetails.getUsername(), role);
             return ResponseEntity.ok(Map.of("token", token));
-        } catch (Exception ex) {
-            return ResponseEntity.status(401).body(Map.of("error", "Invalid credentials"));
+
+        } catch (BadCredentialsException ex) {
+            return ResponseEntity.status(401).body(Map.of("error", "Geçersiz kimlik bilgileri"));
         }
     }
 }
